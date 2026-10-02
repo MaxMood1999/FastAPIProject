@@ -70,8 +70,6 @@ branch coverage isboti emas. 70 amal ichiga 2 ta health endpoint ham kiradi.
 
 - Real Telegram bot tokeni va haqiqiy ota-onalar bilan yuborish tekshirilmagan;
   tashqi transport `httpx.MockTransport` orqali sinovdan o'tdi.
-- Docker Engine bu kompyuterda mavjud emas: Compose build/run bajarilmadi.
-  Backend va migratsiyalar bevosita Python/PostgreSQL'da bajarildi.
 - GitHub Actions konfiguratsiyasi qo'shildi, remote CI ishga tushirilmagan.
 - Alohida Uvicorn TCP smoke testi, katta yuklama, penetration test, uzoq davomli
   worker soak testi va production backup/restore sinovi bajarilmagan.

@@ -4,58 +4,70 @@ Faqat backend. Frontend yo'q. ZIP ichidagi 13 bo'lim asosida autentifikatsiya, x
 o'quvchilar, ota-onalar, lidlar, kurslar, guruhlar, darslar, davomat, moliya,
 Telegram navbati, hisobotlar va audit amalga oshirilgan.
 
-## Docker bilan ishga tushirish
+## Lokal ishga tushirish (Windows)
 
-Docker Engine va Docker Compose kerak.
+Python 3.12+ va PostgreSQL 17+ o'rnatilgan bo'lishi kerak. PostgreSQL Windows
+servisini alohida yoqish shart emas: skript loyiha uchun `.local/pgdata` ichida
+klaster yaratadi va faqat `127.0.0.1:55432` manzilida ishga tushiradi.
+PostgreSQL standart katalogda bo'lmasa, `POSTGRES_BIN` muhit o'zgaruvchisiga
+uning `bin` katalogini yozing.
 
-1. `.env.example` faylini `.env` nomi bilan nusxalang.
-2. `POSTGRES_PASSWORD` uchun kuchli, URL-safe parol, `JWT_SECRET` uchun tasodifiy
-   kamida 32 belgili qiymat yozing. Masalan: `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
-   Namuna qiymatlarini production'da ishlatmang. `.env` Git'ga kiritilmaydi.
-3. Ishga tushiring:
+Loyiha katalogidagi PowerShell terminalida bir marta:
 
-```sh
-docker compose up --build -d
-docker compose exec api python -m app.cli create-admin --username admin --name Administrator
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\local.ps1 setup
+powershell -ExecutionPolicy Bypass -File .\scripts\local.ps1 admin
 ```
 
-Admin paroli terminalda ikki marta so'raladi; kamida 12 belgi. Tayyor/default admin
-paroli yo'q. Migratsiya alohida servisda bajariladi, keyin API va worker boshlanadi.
+`setup` virtual muhit va kutubxonalarni tayyorlaydi, tasodifiy baza paroli va
+JWT kalitini `.env`ga yozadi, `crm` va `crm_test` bazalarini yaratadi hamda
+migratsiyalarni bajaradi. Mavjud lokal klaster va JWT kaliti qayta ishlatiladi.
+Eski tashqi baza manzili lokal klaster manziliga almashtiriladi.
+Admin parolini o'zingiz kiriting (kamida 12 belgi); tayyor admin paroli yo'q.
+
+API'ni ishga tushirish:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\local.ps1 api
+```
+
+Boshqa terminalda fon vazifalarini ishga tushirish:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\local.ps1 worker
+```
+
+API va worker'ni `Ctrl+C` bilan to'xtating. Keyin lokal bazani to'xtatish:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\local.ps1 stop
+```
+
+Ma'lumotlar `.local/pgdata`da saqlanadi. `.env` va `.local`ni saqlab qo'ying;
+keyingi ishga tushirishda `setup`ni takrorlash shart emas.
 
 - Swagger: http://127.0.0.1:8000/docs
 - ReDoc: http://127.0.0.1:8000/redoc
-- OpenAPI: http://127.0.0.1:8000/openapi.json
-- Liveness: `/health/live`; PostgreSQL/migratsiya readiness: `/health/ready`.
+- Liveness: `/health/live`; baza tayyorligi: `/health/ready`.
 - API prefiksi: `/api/v1`.
 
-Compose PostgreSQL portini tashqariga ochmaydi; API faqat localhost'ga bog'langan.
-Tashqi serverda HTTPS reverse proxy orqali chiqaring. Ma'lumotlar `postgres_data`
-volume'ida qoladi. `docker compose down -v` bazani o'chiradi — odatiy to'xtatish uchun
-`docker compose down` yetarli.
+## Qo'lda lokal ishga tushirish (Linux/macOS yoki mavjud PostgreSQL)
 
-## Docker'siz ishga tushirish
-
-Python 3.12+ va PostgreSQL 17 tavsiya etiladi. Alohida `crm` bazasi/roli yarating,
-`.env` ichidagi `DATABASE_URL`ni ularga moslang.
+Alohida `crm` roli va bazasi yarating. `.env.example`dan `.env` nusxalang,
+`DATABASE_URL`ni mavjud PostgreSQL manziliga moslang va `JWT_SECRET` uchun
+tasodifiy kamida 32 belgili qiymat yozing.
 
 ```sh
 python -m venv .venv-crm
-# Windows: .venv-crm\Scripts\Activate.ps1
-# Linux/macOS: source .venv-crm/bin/activate
+source .venv-crm/bin/activate
 python -m pip install -r requirements.txt
 python -m alembic upgrade head
 python -m app.cli create-admin
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Boshqa terminalda shu virtual muhit va `.env` bilan:
-
-```sh
-python -m app.worker
-```
-
-`uvicorn main:app` ham ishlaydi. Jadval va xabar vazifalari API jarayonida yashirin
-ishga tushmaydi; worker alohida jarayon bo'lishi kerak.
+Boshqa terminalda shu muhit va loyiha katalogida `python -m app.worker`ni bajaring.
+`uvicorn main:app` ham ishlaydi. Worker alohida jarayon bo'lishi kerak.
 
 ## API'dan foydalanish
 
@@ -201,9 +213,16 @@ Testlar haqiqiy PostgreSQL transaction, FK/unique constraint va row/advisory loc
 ishlatadi. Telegram so'rovlari `httpx.MockTransport` bilan tekshiriladi, haqiqiy
 ota-onalarga xabar yuborilmaydi. Yakuniy natija: [docs/test-report.md](docs/test-report.md).
 
-`.github/workflows/tests.yml` PostgreSQL bilan CI bajaradi. Ushbu kompyuter uchun
-`scripts/verify.ps1` portable `.local/pgsql` va `.packages` orqali tekshirish yordamchisi;
-boshqa kompyuterda yuqoridagi standart buyruqlar yoki CI'dan foydalaning.
+Windows'da `setup` yaratgan alohida `crm_test` bazasida tekshirish:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1
+```
+
+Skript test kutubxonalarini o'rnatadi, migratsiya mosligini, lint, format va
+API testlarini tekshiradi. `-MigrationRoundTrip` faqat test bazasida migratsiyani
+orqaga va yana oldinga bajaradi. `.github/workflows/tests.yml` lokal PostgreSQL
+servisi bilan CI bajaradi.
 
 ## Tuzilma va xizmat ko'rsatish
 

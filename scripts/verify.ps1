@@ -1,37 +1,34 @@
-param([switch]$CreateDatabase, [switch]$GenerateMigration, [switch]$MigrationRoundTrip, [switch]$StopDatabase)
+param([switch]$MigrationRoundTrip)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $projectRoot
-$runtimePython = 'C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
-$env:PYTHONPATH = "$projectRoot\.packages;$projectRoot"
-$env:TEST_DATABASE_URL = 'postgresql+psycopg://crm_test@127.0.0.1:55432/crm_test'
+$python = Join-Path $projectRoot '.venv\Scripts\python.exe'
+if (-not (Test-Path -LiteralPath $python)) { throw 'Avval scripts/local.ps1 setup ni bajaring.' }
+& $python scripts/local_db.py start
+if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL ishga tushmadi.' }
+if (-not $env:TEST_DATABASE_URL) {
+    $env:TEST_DATABASE_URL = & $python -c "from dotenv import dotenv_values; from sqlalchemy.engine import make_url; print(make_url(dotenv_values('.env')['DATABASE_URL']).set(database='crm_test').render_as_string(hide_password=False))"
+    if ($LASTEXITCODE -ne 0) { throw 'Test bazasi sozlanmadi.' }
+}
+& $python -c "import os; from sqlalchemy.engine import make_url; assert make_url(os.environ['TEST_DATABASE_URL']).database.endswith('_test'), 'Dedicated _test database required'"
+if ($LASTEXITCODE -ne 0) { throw 'Alohida _test bazasi talab qilinadi.' }
 $env:DATABASE_URL = $env:TEST_DATABASE_URL
 $env:JWT_SECRET = 'local-test-secret-only-not-for-production-123456'
-if ($StopDatabase) {
-    & .local\pgsql\bin\pg_ctl.exe -D .local\pgdata -m fast -w stop
-    exit $LASTEXITCODE
-}
-if ($CreateDatabase) {
-    & .local\pgsql\bin\createdb.exe -h 127.0.0.1 -p 55432 -U crm_test crm_test
-    if ($LASTEXITCODE -ne 0) { throw 'Database creation failed' }
-}
-if ($GenerateMigration) {
-    & $runtimePython -m alembic revision --autogenerate -m 'Initial CRM schema'
-    if ($LASTEXITCODE -ne 0) { throw 'Migration generation failed' }
-}
-& $runtimePython -m alembic upgrade head
+& $python -m pip install -r requirements-dev.txt
+if ($LASTEXITCODE -ne 0) { throw 'Test kutubxonalari o''rnatilmadi.' }
+& $python -m alembic upgrade head
 if ($LASTEXITCODE -ne 0) { throw 'Migration failed' }
 if ($MigrationRoundTrip) {
-    & $runtimePython -m alembic downgrade base
+    & $python -m alembic downgrade base
     if ($LASTEXITCODE -ne 0) { throw 'Migration downgrade failed' }
-    & $runtimePython -m alembic upgrade head
+    & $python -m alembic upgrade head
     if ($LASTEXITCODE -ne 0) { throw 'Migration re-upgrade failed' }
 }
-& $runtimePython -m alembic check
+& $python -m alembic check
 if ($LASTEXITCODE -ne 0) { throw 'Model/migration drift detected' }
-& $runtimePython -m ruff check app tests main.py alembic --fix
+& $python -m ruff check app tests main.py alembic scripts/local_db.py
 if ($LASTEXITCODE -ne 0) { throw 'Lint failed' }
-& $runtimePython -m ruff format app tests main.py alembic
-& $runtimePython -m pytest --cov=app --cov-report=term-missing --cov-report=html --junitxml=.local/test-results.xml
+& $python -m ruff format --check app tests main.py alembic scripts/local_db.py
+if ($LASTEXITCODE -ne 0) { throw 'Format check failed' }
+& $python -m pytest --cov=app --cov-report=term-missing --cov-report=html --junitxml=.local/test-results.xml
 if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
-& $runtimePython -c "from app.main import app; schema=app.openapi(); print('API operations:', sum(1 for path in schema['paths'].values() for method in path if method in ['get','post','put','patch','delete'])); import json; from pathlib import Path; Path('docs/openapi.json').write_text(json.dumps(schema, ensure_ascii=False, indent=2), encoding='utf-8')"
