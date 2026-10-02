@@ -1,0 +1,16 @@
+### Public health
+GET http://127.0.0.1:8000/health/ready
+
+### Login: use the admin created with python -m app.cli create-admin
+POST http://127.0.0.1:8000/api/v1/auth/login
+Content-Type: application/json
+
+{"username":"admin","password":"replace-with-your-admin-password"}
+
+### Set token in your HTTP client's private environment
+GET http://127.0.0.1:8000/api/v1/auth/me
+Authorization: Bearer {{token}}
+
+### Courses
+GET http://127.0.0.1:8000/api/v1/courses?page=1&size=20
+Authorization: Bearer {{token}}

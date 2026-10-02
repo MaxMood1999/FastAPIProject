@@ -1,0 +1,15 @@
+.git
+.env
+.venv
+.venv-crm
+.packages
+.local
+.idea
+__pycache__
+.pytest_cache
+htmlcov
+tests
+.github
+.ruff_cache
+.coverage
+coverage.xml
